@@ -34,8 +34,9 @@ def get_directory_size(path):
 
 
 class FileListView(FileChooserListView):
-    def __init__(self, **kwargs):
+    def __init__(self, size_provider=get_directory_size, **kwargs):
         super(FileListView, self).__init__(**kwargs)
+        self.size_provider = size_provider
         self.bind(on_entry_added=self.update_entry)
 
     def format_size(self, size):
@@ -60,46 +61,62 @@ class FileListView(FileChooserListView):
             print(f'Computing size of folder {entry.path}')
             box_layout = entry.children[0]
             size_label = box_layout.children[0]
-            size_label.text = self.format_size(get_directory_size(entry.path))
+            size_label.text = self.format_size(self.size_provider(entry.path))
+
+class ToolbarWidget(BoxLayout):
+    def __init__(self, on_select=None, on_refresh=None, **kwargs):
+        kwargs.setdefault('orientation', 'horizontal')
+        kwargs.setdefault('size_hint', (1, 0.05))
+        super().__init__(**kwargs)
+
+        self.folder_name = TextInput(text='C:\\Users\\', multiline=False)
+        select_button = Button(text='Select Folder')
+        refresh_button = Button(text='Refresh')
+
+        if on_select:
+            select_button.bind(on_press=lambda _: on_select(self.folder_name.text))
+        if on_refresh:
+            refresh_button.bind(on_press=lambda _: on_refresh())
+
+        self.add_widget(self.folder_name)
+        self.add_widget(select_button)
+        self.add_widget(refresh_button)
+
+    @property
+    def path(self):
+        return self.folder_name.text
+
+    @path.setter
+    def path(self, value):
+        self.folder_name.text = value
+
 
 class FolderExplorer(App):
     def build(self):
         layout = BoxLayout(orientation='vertical')
-        
-        # Change folder menu
-        self.folder_name = TextInput(text='C:\\Users\\', multiline=False)
-        self.select_folder_button = Button(text='Select Folder')
-        self.refresh_button = Button(text='Refresh')
-        
-        self.input_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.05))
-        self.input_layout.add_widget(self.folder_name)
-        self.input_layout.add_widget(self.select_folder_button)
-        self.input_layout.add_widget(self.refresh_button)
 
-        # File list with folder sizes
-        self.file_list_view = FileListView()
+        self.toolbar = ToolbarWidget(
+            on_select=self.select_folder,
+            on_refresh=self.refresh,
+        )
+        self.file_list_view = FileListView(size_provider=get_directory_size)
         self.file_list_view.bind(path=self.update_text_input)
 
-        # Update screen with final layout
-        layout.add_widget(self.input_layout)
+        layout.add_widget(self.toolbar)
         layout.add_widget(self.file_list_view)
 
         return layout
 
-    def on_start(self):
-        self.select_folder_button.bind(on_press=self.select_folder)
-        self.refresh_button.bind(on_press=self.refresh)
-
-    def select_folder(self, instance):
+    def select_folder(self, path):
         """Selects the folder and updates the file list."""
-        self.file_list_view.path = self.folder_name.text
+        self.file_list_view.path = path
         self.file_list_view._update_files()
 
     def update_text_input(self, *args):
         """Updates the text input with the current folder."""
-        self.folder_name.text = self.file_list_view.path
+        self.toolbar.path = self.file_list_view.path
 
-    def refresh(self, *args):
+    def refresh(self):
         """Invalidates the cache and refreshes the file list."""
         get_directory_size.cache_clear()
         self.file_list_view._update_files()
