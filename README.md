@@ -4,12 +4,20 @@ Recently my computer ran out of space and I had to delete a lot of files. I was 
 
 ![C drive](imgs/c-drive.png)
 
-The program is something I wrote in my free time, it's not perfect. I'm not the most expert in Kinvy, so right now the program will freeze for a long time until it's done computing the folder sizes, but it does the job and I'm happy with it. I'm sharing it in case someone else finds it useful.
+The program is something I wrote in my free time, it's not perfect. Folder sizes are computed concurrently in a background thread pool, so the UI stays responsive while sizes load in.
 
 ![UI](imgs/ui.png)
 
+## Features
+
+- Browse folders and see their sizes computed in the background
+- Sort entries by name or by size
+- Refresh to recompute sizes
+- Shows hidden and system files
+- Skips symlinks and junction points to avoid double-counting
+
 ## How to use
 
-1. You can check the conda environment file to see the dependencies in the `environment.yml` file. To create the environment, run `conda env create -f environment.yml`.
+1. Install dependencies with `uv sync`.
 
-2. Run the program with `python main.py`.
+2. Run the program with `uv run main.py`.
