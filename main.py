@@ -4,10 +4,11 @@ files and folders.
 """
 import os
 import logging
-
+from concurrent.futures import ThreadPoolExecutor
 from functools import cache
 
 from kivy.app import App
+from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.filechooser import FileChooserListView
@@ -37,7 +38,18 @@ class FileListView(FileChooserListView):
     def __init__(self, size_provider=get_directory_size, **kwargs):
         super(FileListView, self).__init__(**kwargs)
         self.size_provider = size_provider
+        workers = max(1, (os.cpu_count() or 1) - 1)
+        self._executor = ThreadPoolExecutor(max_workers=workers)
+        self._pending_futures = []
+        self._generation = 0
         self.bind(on_entry_added=self.update_entry)
+
+    def _update_files(self, *args, **kwargs):
+        self._generation += 1
+        for future in self._pending_futures:
+            future.cancel()
+        self._pending_futures.clear()
+        super()._update_files(*args, **kwargs)
 
     def format_size(self, size):
         """Formats the size of the file or folder."""
@@ -53,15 +65,27 @@ class FileListView(FileChooserListView):
 
     def update_entry(self, instance, entry, *args):
         """Updates the size of the file or folder."""
-        if os.path.isdir(entry.path):
-            # Skip if folder is protected
-            if not os.access(entry.path, os.W_OK):
-                return
+        if not os.path.isdir(entry.path):
+            return
+        if not os.access(entry.path, os.W_OK):
+            return
 
-            print(f'Computing size of folder {entry.path}')
-            box_layout = entry.children[0]
-            size_label = box_layout.children[0]
-            size_label.text = self.format_size(self.size_provider(entry.path))
+        box_layout = entry.children[0]
+        size_label = box_layout.children[0]
+        size_label.text = "..."
+
+        path = entry.path
+        generation = self._generation
+
+        def compute():
+            size = self.size_provider(path)
+            formatted = self.format_size(size)
+            def update(dt):
+                if self._generation == generation:
+                    size_label.text = formatted
+            Clock.schedule_once(update)
+
+        self._pending_futures.append(self._executor.submit(compute))
 
 class ToolbarWidget(BoxLayout):
     def __init__(self, on_select=None, on_refresh=None, **kwargs):
