@@ -19,19 +19,26 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+EXCLUDED_PATHS = {
+    r'C:\System Volume Information',
+    r'C:\Windows\System32\config\SAM',
+}
+
 @cache
 def get_directory_size(path):
-    total_size = 0
     try:
+        if path in EXCLUDED_PATHS or os.path.islink(path):
+            return 0
         if os.path.isfile(path):
             return os.path.getsize(path)
 
         total_size = 0
         for item in os.listdir(path):
             total_size += get_directory_size(os.path.join(path, item))
+        return total_size
     except Exception as e:
         logger.error('Error getting size of %s: %s' % (path, e))
-    return total_size
+        return 0
 
 
 class FileListView(FileChooserListView):
